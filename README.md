@@ -14,7 +14,9 @@ Then I would gain more confidence to build more projects as this will serve as t
 
 If I can do this well, perhaps other aspiring rust devs could use this as a template to learn how to build API's using Rust.
 
-#Stack & external crates used tbh... you can just check this stuff out in the cargo.toml file but I'm bored at work.
+# Stack & crates used 
+Tbh... you can just check this stuff out in the cargo.toml file but I'm bored at work.
+
 - Rust (Tokio async runtime, Tls is Rustls).
   - tokio 1.38.0 
   - serde 1.0.204
