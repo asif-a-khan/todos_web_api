@@ -1,6 +1,6 @@
 ### I forgot how to write markdown so this might be awkward.
 
-## I'm trying to learn how to web dev with rust. The current atate of backend framework documentation is.. limited........
+## I'm trying to learn how to web dev with rust. The current state of backend framework documentation is.. limited........
 
 I figured if I setup a todos app that incorporated:
   -  A dedicated database
