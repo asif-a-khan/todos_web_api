@@ -5,9 +5,9 @@
 4. Create a .env file in the root of the directory. Edit the variables to what you want.
 
 ```
-DATABASE_URL="mysql://root:test@mysql_db:3306/test_db"
-MYSQL_ROOT_PASSWORD="test"
-MYSQL_DATABASE="test_db"
+DATABASE_URL="mysql://root:<enter_password>@mysql_db:3306/<enter_db_name>"
+MYSQL_ROOT_PASSWORD="<enter_password>"
+MYSQL_DATABASE="<enter_db_name>"
 ```
 
 5. Run docker compose up -d --build.
