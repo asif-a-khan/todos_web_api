@@ -11,7 +11,13 @@ use sqlx::{
 use std::env;
 use dotenv::dotenv;
 
-use todos_web_api::todos_index;
+use todos_web_api::{
+    todos_create, 
+    todos_delete, 
+    todos_find, 
+    todos_index, 
+    todos_update
+};
 
 #[tokio::main]
 async fn main() -> Result<(), Error> {
@@ -31,7 +37,11 @@ async fn main() -> Result<(), Error> {
     // Web Server Routes Init
     let app = Router::new()
     .route("/", get(|| async { "Hello" }))
-    .route("/todos", get(todos_index));
+    .route("/todos", get(todos_index).post(todos_create))
+    .route("/todos/:id", get(todos_find)
+        .patch(todos_update)
+        .delete(todos_delete)
+    );
 
     let listener = tokio::net::TcpListener::bind("0.0.0.0:8000").await.unwrap();
     axum::serve(listener, app).await.unwrap();
