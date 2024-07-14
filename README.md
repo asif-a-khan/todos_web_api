@@ -1,4 +1,4 @@
-# Steps to run locally:
+# Steps to run locally
 1. Ensure you have docker cli installed for Linux and/or docker-desktop installed on Windows. If you're on a Mac... kick rocks.. jk I'll try to add the steps for Mac OS later.
 2. Clone/download repo to wherever you want.
 3. cd into the directory of the repo.
@@ -52,7 +52,7 @@ Then I would gain more confidence to build more projects as this will serve as t
 
 If I can do this well, perhaps other aspiring rust devs could use this as a template to learn how to build API's using Rust.
 
-# Stack & crates used 
+## Stack & crates used 
 Tbh... you can just check this stuff out in the cargo.toml file but I'm bored at work.
 
 - Rust (Tokio async runtime, Tls is Rustls).
