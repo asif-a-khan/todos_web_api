@@ -38,19 +38,25 @@ async fn main() -> Result<(), Error> {
 
     // Web Server Routes Init
     let app = Router::new()
-    .route("/", get(|| async { "Hello" }))
-    .route("/todos", 
-        get(todos_index)
-        .post(todos_create)
-    )
-    .route("/todos/:id", 
-        get(todos_find)
-        .patch(todos_update)
-        .delete(todos_delete)
-    )
-    .layer(Extension(pool));
+        .route("/", get(|| async { "Hello" }))
+        .route("/todos", 
+            get(todos_index)
+            .post(todos_create)
+        )
+        .route("/todos/:id", 
+            get(todos_find)
+            .patch(todos_update)
+            .delete(todos_delete)
+        )
+        .layer(Extension(pool));
 
-    let listener = tokio::net::TcpListener::bind("0.0.0.0:8000").await.unwrap();
-    axum::serve(listener, app).await.unwrap();
+    let listener = tokio::net::TcpListener::bind("0.0.0.0:8000")
+        .await
+        .unwrap();
+
+    axum::serve(listener, app)
+        .await
+        .unwrap();
+
     Ok(())
 }
