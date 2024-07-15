@@ -1,12 +1,21 @@
+use std::borrow::Cow;
+
+use argon2::password_hash::SaltString;
 use axum::{
-	extract::Path, 
+	// extract::Path, 
 	http::StatusCode, 
 	response::IntoResponse, 
 	Json,
 	Extension
 };
+use chrono::{
+    // DateTime, 
+    Duration, 
+    Utc
+}; 
+use argon2::{Argon2, PasswordHasher};
 
-use jsonwebtoken::{encode, EncodingKey, Header};
+// use jsonwebtoken::{encode, EncodingKey, Header};
 use validator::{Validate, ValidationErrors};
 use rand::distributions::Alphanumeric;
 use rand::{thread_rng, Rng};
@@ -23,9 +32,12 @@ pub async fn register_user(
         return Err((StatusCode::BAD_REQUEST, error_message));
     }
 
+    // Required for step 2. Generate Salt:
+    let salt = SaltString::generate(&mut rand::thread_rng());
+
     // 2. Password Hashing:
     let password_hash = Argon2::default()
-        .hash_password(payload.password.as_bytes(), &[])
+        .hash_password(payload.password_hash.as_bytes(), &salt)
         .map_err(|_| (StatusCode::INTERNAL_SERVER_ERROR, "Password hashing failed".to_string()))?;
 
     // 3. Generate a refresh token:
@@ -44,27 +56,22 @@ pub async fn register_user(
     };
 
     // 5. Insert User into Database:
-    let query_result = sqlx::query!(
-        r#"
-        INSERT INTO users (username, password_hash, email, phone_number, refresh_token, refresh_token_expiry)
-        VALUES (?, ?, ?, ?, ?, ?)
-        "#,
-        user.username,
-        user.password_hash,
-        user.email,
-        user.phone_number,
-        user.phone_number_verified,
-        user.refresh_token,
-        user.refresh_token_expiry
-    )
-    .execute(&pool)
-    .await;
+    let query_result = sqlx::query("INSERT INTO users (username, password_hash, email, phone_number, refresh_token, refresh_token_expiry) VALUES (?, ?, ?, ?, ?, ?)")
+        .bind(user.username)
+        .bind(user.email)
+        .bind(user.password_hash)
+        .bind(user.phone_number_verified)
+        .bind(user.phone_number)
+        .bind(user.refresh_token_expiry)
+        .bind(user.refresh_token)
+        .execute(&pool)
+        .await;
 
     // 6. Handle Database Errors:
     match query_result {
         Ok(_) => Ok((StatusCode::CREATED, "User registered successfully".to_string())),
         Err(sqlx::Error::Database(err)) => {
-            if err.code() == Some("23000".to_string()) { // Duplicate entry
+            if let Some(Cow::Borrowed("23000")) = err.code() { // Pattern matching
                 Err((StatusCode::CONFLICT, "Username or email already taken".to_string()))
             } else {
                 Err((StatusCode::INTERNAL_SERVER_ERROR, format!("Database error: {}", err)))
@@ -79,8 +86,12 @@ fn handle_validation_errors(errors: ValidationErrors) -> String {
     let formatted_errors: Vec<String> = errors
         .field_errors()
         .into_iter()
-        .map(|(field, error)| {
-            format!("{}: {:?}", field, error.code)
+        .map(|(field, errors)| {
+            let error_messages: Vec<_> = errors
+                .iter()
+                .filter_map(|err| err.message.clone().map(|msg| msg.into_owned())) // Handle Optional message
+                .collect();
+            format!("{}: {}", field, error_messages.join(", "))
         })
         .collect();
     formatted_errors.join(", ")
