@@ -6,23 +6,14 @@ use axum::{
 	Extension
 };
 
-use serde::{Deserialize, Serialize};
-use sqlx::prelude::FromRow;
+use super::super::models::todo::{
+	Todo, 
+	CreateTodo
+};
 
-#[derive(FromRow, Debug, Serialize, Deserialize)]
-pub struct Todo {
-	pub id: i32,
-	pub description: String,
-	pub done: bool
-}
+use sqlx::MySqlPool;
 
-#[derive(FromRow, Debug, Serialize, Deserialize)]
-pub struct CreateTodo {
-	pub description: String,
-	pub done: bool
-}
-
-pub async fn todos_index(Extension(pool): Extension<sqlx::MySqlPool>) -> impl IntoResponse  {
+pub async fn todos_index(Extension(pool): Extension<MySqlPool>) -> impl IntoResponse  {
 	let q = "SELECT * FROM todos";
 
 	let todos = sqlx::query_as::<_, Todo>(q)
@@ -33,7 +24,8 @@ pub async fn todos_index(Extension(pool): Extension<sqlx::MySqlPool>) -> impl In
 			let test = Todo {
 				id: 0,
 				description: "Error".to_string(),
-				done: false
+				done: false,
+				user_id: 1
 			};
 			vec![test]
 		});
@@ -42,7 +34,7 @@ pub async fn todos_index(Extension(pool): Extension<sqlx::MySqlPool>) -> impl In
 }
 
 pub async fn todos_find(
-	Extension(pool): Extension<sqlx::MySqlPool>, 
+	Extension(pool): Extension<MySqlPool>, 
 	Path(id): Path<i32>
 ) -> impl IntoResponse  {
 	let q = format!("SELECT * FROM todos WHERE id = {}", id).to_string();
@@ -56,14 +48,15 @@ pub async fn todos_find(
 }
 
 pub async fn todos_create(
-	Extension(pool): Extension<sqlx::MySqlPool>,
+	Extension(pool): Extension<MySqlPool>,
 	Json(input): Json<CreateTodo>
 ) -> impl IntoResponse  {
-	let q = "INSERT INTO todos (description, done) VALUES (?, ?)";
+	let q = "INSERT INTO todos (description, done, user_id) VALUES (?, ?, ?)";
 
 	let todo = sqlx::query(q)
 		.bind(input.description)
 		.bind(input.done)
+		.bind(input.user_id)
 		.execute(&pool)
 		.await
 		.unwrap()
@@ -73,14 +66,15 @@ pub async fn todos_create(
 }
 
 pub async fn todos_update(
-	Extension(pool): Extension<sqlx::MySqlPool>,
+	Extension(pool): Extension<MySqlPool>,
 	Path(id): Path<i32>, Json(input): Json<CreateTodo>
 ) -> impl IntoResponse  {
-	let q = "UPDATE todos SET description = ?, done = ? WHERE id = ?";
+	let q = "UPDATE todos SET description = ?, done = ?, user_id = ? WHERE id = ?";
 
 	let todo = sqlx::query(q)
 		.bind(input.description)
 		.bind(input.done)
+		.bind(input.user_id)
 		.bind(id)
 		.execute(&pool)
 		.await
@@ -91,7 +85,7 @@ pub async fn todos_update(
 }
 
 pub async fn todos_delete(
-	Extension(pool): Extension<sqlx::MySqlPool>,
+	Extension(pool): Extension<MySqlPool>,
 	Path(id): Path<i32>
 ) -> impl IntoResponse  {
 	let q = "DELETE FROM todos WHERE id = ?";

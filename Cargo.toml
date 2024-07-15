@@ -4,8 +4,13 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
+argon2 = "0.5.3"
 axum = { version = "0.7.5", features = ["macros"] }
+chrono = { version = "0.4.38", features = ["serde"] }
 dotenv = "0.15.0"
+jsonwebtoken = "9.3.0"
+rand = "0.8.5"
 serde = "1.0.204"
 sqlx = { version = "0.7.4", features = ["runtime-tokio", "tls-rustls", "mysql"] }
 tokio = { version = "1.38.0", features = ["full"] }
+validator = "0.18.1"
