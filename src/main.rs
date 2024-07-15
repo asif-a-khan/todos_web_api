@@ -1,5 +1,8 @@
+use std::env;
+
 use axum::{
     routing::get, 
+    Extension, 
     Router
 };
 
@@ -8,10 +11,9 @@ use sqlx::{
     Error
 };
 
-use std::env;
 use dotenv::dotenv;
 
-use todos_web_api::{
+use todos_web_api::controllers::todos_controller::{
     todos_create, 
     todos_delete, 
     todos_find, 
@@ -22,8 +24,8 @@ use todos_web_api::{
 #[tokio::main]
 async fn main() -> Result<(), Error> {
     dotenv().ok();
-    let db_url = env::var("DATABASE_URL").expect("Database URL Not Found");
     // Database Init
+    let db_url = env::var("DATABASE_URL").expect("Database URL Not Found");
     let pool = MySqlPoolOptions::new()
         .max_connections(5)
         .connect(&db_url)
@@ -37,11 +39,16 @@ async fn main() -> Result<(), Error> {
     // Web Server Routes Init
     let app = Router::new()
     .route("/", get(|| async { "Hello" }))
-    .route("/todos", get(todos_index).post(todos_create))
-    .route("/todos/:id", get(todos_find)
+    .route("/todos", 
+        get(todos_index)
+        .post(todos_create)
+    )
+    .route("/todos/:id", 
+        get(todos_find)
         .patch(todos_update)
         .delete(todos_delete)
-    );
+    )
+    .layer(Extension(pool));
 
     let listener = tokio::net::TcpListener::bind("0.0.0.0:8000").await.unwrap();
     axum::serve(listener, app).await.unwrap();
