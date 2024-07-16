@@ -1,5 +1,5 @@
+use chrono::Local;
 use serde::{Deserialize, Serialize};
-use chrono::{DateTime, Utc}; 
 use sqlx::FromRow;
 use validator::{
     ValidationErrors,
@@ -15,10 +15,29 @@ pub struct User {
     pub phone_number: Option<String>,
     pub phone_number_verified: bool,
     pub refresh_token: Option<String>,
-    pub refresh_token_expiry: Option<DateTime<Utc>>
+    pub refresh_token_expiry: Option<chrono::DateTime<Local>>
 }
 
-impl validator::Validate for User {
+#[derive(Deserialize, Serialize, FromRow)]
+pub struct CreateUser {
+    pub username: String,
+    pub password: String,
+    pub email: String,
+    pub phone_number: Option<String>,
+    pub phone_number_verified: bool,
+    pub refresh_token: Option<String>,
+    pub refresh_token_expiry: Option<chrono::DateTime<Local>>
+}
+
+#[derive(Deserialize, Serialize, FromRow)]
+pub struct CreateUserFromInput {
+    pub username: String,
+    pub password: String,
+    pub email: String,
+    pub phone_number: Option<String>
+}
+
+impl validator::Validate for CreateUser {
     fn validate(&self) -> Result<(), ValidationErrors> {
         let mut errors = ValidationErrors::new();
         if self.username.is_empty() {
@@ -29,8 +48,8 @@ impl validator::Validate for User {
             errors.add("email", ValidationError::new("Email cannot be empty"));
         }
 
-        if self.password_hash.is_empty() {
-            errors.add("password_hash", ValidationError::new("Password cannot be empty"));
+        if self.password.is_empty() {
+            errors.add("password", ValidationError::new("Password cannot be empty"));
         }
 
         if self.phone_number.is_none() {

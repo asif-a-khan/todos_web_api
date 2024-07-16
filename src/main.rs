@@ -13,12 +13,21 @@ use sqlx::{
 
 use dotenv::dotenv;
 
-use todos_web_api::controllers::todos_controller::{
-    todos_create, 
-    todos_delete, 
-    todos_find, 
-    todos_index, 
-    todos_update
+use todos_web_api::controllers::{
+    todos_controller::{
+        todos_index, 
+        todos_find, 
+        todos_create, 
+        todos_delete, 
+        todos_update
+    }, 
+    users_controller::{
+        users_index,
+        users_create, 
+        users_find, 
+        users_delete, 
+        users_update, 
+    }
 };
 
 #[tokio::main]
@@ -47,6 +56,15 @@ async fn main() -> Result<(), Error> {
             get(todos_find)
             .patch(todos_update)
             .delete(todos_delete)
+        )
+        .route("/users", 
+            get(users_index)
+            .post(users_create)
+        )
+        .route("/users/:id", 
+            get(users_find)
+            .patch(users_update)
+            .delete(users_delete)
         )
         .layer(Extension(pool));
 

@@ -1,84 +1,141 @@
-use std::borrow::Cow;
-
-use argon2::password_hash::SaltString;
-use axum::{
-	// extract::Path, 
-	http::StatusCode, 
-	response::IntoResponse, 
-	Json,
-	Extension
+use argon2::{
+    password_hash::{
+        // PasswordHash, 
+        PasswordHasher, 
+        // PasswordVerifier, 
+        SaltString
+    },
+    Argon2,
 };
-use chrono::{
-    // DateTime, 
-    Duration, 
-    Utc
-}; 
-use argon2::{Argon2, PasswordHasher};
+use axum::{
+	extract::Path, 
+    http::StatusCode, 
+    response::IntoResponse, 
+    Extension, 
+    Json
+};
 
+use chrono::{Duration, Local};
 // use jsonwebtoken::{encode, EncodingKey, Header};
-use validator::{Validate, ValidationErrors};
+use validator::{
+    // Validate, 
+    ValidationErrors
+};
 use rand::distributions::Alphanumeric;
+
 use rand::{thread_rng, Rng};
-use super::super::models::user::User;
+use serde::Serialize;
+
+use super::super::models::user::{
+    User,
+    CreateUser,
+    CreateUserFromInput
+};
+
 use sqlx::MySqlPool;
 
-pub async fn register_user(
-    Json(payload): Json<User>,
-    Extension(pool): Extension<MySqlPool>,
+#[derive(Serialize)]
+pub struct RegisterUserResponse {
+    message: String,
+}
+
+pub async fn users_index(
+    Extension(pool): Extension<MySqlPool>
+) -> impl IntoResponse {
+	let q = "SELECT * FROM users";
+
+	let users = sqlx::query_as::<_, User>(q)
+		.fetch_all(&pool)
+		.await
+		.unwrap();
+
+	(StatusCode::OK, Json(users))
+}
+
+pub async fn users_find(
+	Extension(pool): Extension<MySqlPool>, 
+	Path(id): Path<i32>
+) -> impl IntoResponse  {
+	let q = format!("SELECT * FROM users WHERE id = {}", id).to_string();
+
+	let todo = sqlx::query_as::<_, User>(&q)
+		.fetch_one(&pool)
+		.await
+		.unwrap();
+
+	(StatusCode::OK, Json(todo))
+}
+
+pub async fn users_create(
+    Extension(pool): Extension<MySqlPool>, 
+    Json(input): Json<CreateUserFromInput>
 ) -> Result<impl IntoResponse, (StatusCode, String)> {
-    // 1. Input Validation:
-    if let Err(errors) = payload.validate() {
-        let error_message = handle_validation_errors(errors); // Helper function for formatting errors
-        return Err((StatusCode::BAD_REQUEST, error_message));
-    }
+    let q = "INSERT INTO users (username, password_hash, email, phone_number, phone_number_verified, refresh_token, refresh_token_expiry) VALUES (?, ?, ?, ?, ?, ?, ?)";
 
-    // Required for step 2. Generate Salt:
     let salt = SaltString::generate(&mut rand::thread_rng());
+    let argon2 = Argon2::default(); 
+    let password_hash = argon2
+        .hash_password(input.password.as_bytes(), &salt)
+        .expect("Failed to hash password");
 
-    // 2. Password Hashing:
-    let password_hash = Argon2::default()
-        .hash_password(payload.password_hash.as_bytes(), &salt)
-        .map_err(|_| (StatusCode::INTERNAL_SERVER_ERROR, "Password hashing failed".to_string()))?;
+    let refresh_token: String = thread_rng()
+        .sample_iter(&Alphanumeric)
+        .take(32)
+        .map(char::from)
+        .collect();
 
-    // 3. Generate a refresh token:
-    let refresh_token: String = thread_rng().sample_iter(&Alphanumeric).take(32).map(char::from).collect();
-
-    // 4. Create User Struct:
-    let user = User {
-        id: 0, 
-        username: payload.username,
-        password_hash: password_hash.to_string(),
-        email: payload.email,
-        phone_number: payload.phone_number,
+    let new_user = CreateUser {
+        username: input.username,
+        password: password_hash.to_string(),
+        email: input.email,
+        phone_number: input.phone_number,
         phone_number_verified: false,
         refresh_token: Some(refresh_token),
-        refresh_token_expiry: Some(Utc::now() + Duration::days(30)), // Set expiration date
+        refresh_token_expiry: Some(Local::now() + Duration::hours(2)),
     };
 
-    // 5. Insert User into Database:
-    let query_result = sqlx::query("INSERT INTO users (username, password_hash, email, phone_number, refresh_token, refresh_token_expiry) VALUES (?, ?, ?, ?, ?, ?)")
-        .bind(user.username)
-        .bind(user.email)
-        .bind(user.password_hash)
-        .bind(user.phone_number_verified)
-        .bind(user.phone_number)
-        .bind(user.refresh_token_expiry)
-        .bind(user.refresh_token)
-        .execute(&pool)
-        .await;
+	let user_id = sqlx::query(q)
+        .bind(new_user.username)
+        .bind(new_user.password)
+        .bind(new_user.email)
+        .bind(new_user.phone_number)
+        .bind(new_user.phone_number_verified)
+        .bind(new_user.refresh_token)
+        .bind(new_user.refresh_token_expiry)
+		.execute(&pool)
+		.await
+		.unwrap()
+        .last_insert_id();
 
-    // 6. Handle Database Errors:
-    match query_result {
-        Ok(_) => Ok((StatusCode::CREATED, "User registered successfully".to_string())),
-        Err(sqlx::Error::Database(err)) => {
-            if let Some(Cow::Borrowed("23000")) = err.code() { // Pattern matching
-                Err((StatusCode::CONFLICT, "Username or email already taken".to_string()))
-            } else {
-                Err((StatusCode::INTERNAL_SERVER_ERROR, format!("Database error: {}", err)))
-            }
-        }
-        Err(e) => Err((StatusCode::INTERNAL_SERVER_ERROR, format!("Unexpected error: {}", e))),
-    }
+    let q2: &str = "SELECT * FROM users WHERE id = ?";
+
+    let user = sqlx::query_as::<_, User>(q2)
+        .bind(user_id)
+		.fetch_one(&pool)
+		.await
+        .unwrap();
+
+    Ok((StatusCode::CREATED, Json(user)))
+
+}
+
+pub async fn users_update () -> impl IntoResponse{
+    StatusCode::OK
+}
+
+pub async fn users_delete(
+	Extension(pool): Extension<MySqlPool>,
+	Path(id): Path<i32>
+) -> impl IntoResponse  {
+	let q = "DELETE FROM users WHERE id = ?";
+
+	let _delete = sqlx::query(q)
+		.bind(id)
+		.execute(&pool)
+		.await
+		.unwrap();
+
+	StatusCode::OK
 }
 
 // Helper function to format validation errors
