@@ -1,3 +1,5 @@
+use std::borrow::Cow;
+
 use chrono::Local;
 use serde::{Deserialize, Serialize};
 use sqlx::FromRow;
@@ -57,7 +59,7 @@ pub enum FieldValue {
     PhoneNumberVerified(Option<bool>),
     RefreshToken(Option<String>),
     RefreshTokenExpiry(Option<chrono::DateTime<Local>>),
-    
+
 }
 
 impl IntoIterator for UpdateUser {
@@ -77,31 +79,47 @@ impl IntoIterator for UpdateUser {
     }
 }
 
-impl validator::Validate for CreateUser {
+impl validator::Validate for CreateUserFromInput {
     fn validate(&self) -> Result<(), ValidationErrors> {
         let mut errors = ValidationErrors::new();
         if self.username.is_empty() {
-            errors.add("username", ValidationError::new("Username cannot be empty"));
+            errors.add(
+                "username", 
+                ValidationError::new(
+                    "Username cannot be empty")
+                        .with_message(Cow::Borrowed("Username cannot be empty.")
+                )
+            );
         }
 
         if self.email.is_empty() {
-            errors.add("email", ValidationError::new("Email cannot be empty"));
+            errors.add(
+                "email",
+                ValidationError::new(
+                    "Email cannot be empty")
+                        .with_message(Cow::Borrowed("Email cannot be empty.")
+                )
+            );
         }
 
         if self.password.is_empty() {
-            errors.add("password", ValidationError::new("Password cannot be empty"));
+            errors.add(
+                "password",
+                ValidationError::new(
+                    "Password cannot be empty")
+                        .with_message(Cow::Borrowed("Password cannot be empty.")
+                )
+            );
         }
 
         if self.phone_number.is_none() {
-            errors.add("phone_number", ValidationError::new("Phone number cannot be empty"));
-        }
-
-        if self.refresh_token.is_none() {
-            errors.add("refresh_token", ValidationError::new("Refresh token cannot be empty"));
-        }
-
-        if self.refresh_token_expiry.is_none() {
-            errors.add("refresh_token_expiry", ValidationError::new("Refresh token expiry cannot be empty"));
+            errors.add(
+                "phone_number",
+                ValidationError::new(
+                    "Phone number cannot be empty")
+                        .with_message(Cow::Borrowed("Phone number cannot be empty.")
+                )
+            );
         }
 
         if errors.is_empty() {

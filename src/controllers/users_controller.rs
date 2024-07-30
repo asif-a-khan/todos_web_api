@@ -26,6 +26,7 @@ use chrono::{Duration, Local};
 use rand::distributions::Alphanumeric;
 
 use rand::{thread_rng, Rng};
+use validator::{Validate, ValidationErrors};
 
 use crate::models::user::FieldValue;
 
@@ -75,6 +76,13 @@ pub async fn users_create(
     Extension(pool): Extension<MySqlPool>, 
     Json(input): Json<CreateUserFromInput>
 ) -> Result<impl IntoResponse, (StatusCode, String)> {
+    let validation = input.validate();
+
+    if let Err(e) = validation {
+        let error_string = handle_validation_errors(e);
+        return Err((StatusCode::BAD_REQUEST, format!("Validation failed: {}", error_string)))
+    }
+
     let q = "INSERT INTO users (username, password_hash, email, phone_number, phone_number_verified, refresh_token, refresh_token_expiry) VALUES (?, ?, ?, ?, ?, ?, ?)";
 
     let salt = SaltString::generate(&mut rand::thread_rng());
@@ -263,17 +271,18 @@ pub async fn users_delete(
 }
 
 // Helper function to format validation errors
-// fn handle_validation_errors(errors: ValidationErrors) -> String {
-//     let formatted_errors: Vec<String> = errors
-//         .field_errors()
-//         .into_iter()
-//         .map(|(field, errors)| {
-//             let error_messages: Vec<_> = errors
-//                 .iter()
-//                 .filter_map(|err| err.message.clone().map(|msg| msg.into_owned())) // Handle Optional message
-//                 .collect();
-//             format!("{}: {}", field, error_messages.join(", "))
-//         })
-//         .collect();
-//     formatted_errors.join(", ")
-// }
+fn handle_validation_errors(errors: ValidationErrors) -> String {
+    println!("Validation errors: {:#?}", errors);
+    let formatted_errors: Vec<String> = errors
+        .field_errors()
+        .into_iter()
+        .map(|(field, errors)| {
+            let error_messages: Vec<_> = errors
+                .iter()
+                .filter_map(|err| err.message.clone().map(|msg| msg.into_owned())) // Handle Optional message
+                .collect();
+            format!("{}: {}", field, error_messages.join(", "))
+        })
+        .collect();
+    formatted_errors.join(", ")
+}
