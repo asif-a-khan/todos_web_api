@@ -196,7 +196,11 @@ pub async fn fetch_user(id: &i32, pool: &MySqlPool) -> Result<User, (StatusCode,
 }
 
 // Helper function for users_update.
-pub fn users_update_query_builder(query: &mut String, params: &mut Vec<String>, updates: &UpdateUser) {
+pub fn users_update_query_builder(
+    query: &mut String, 
+    params: &mut Vec<String>, 
+    updates: &UpdateUser
+) {
     // Go through all fields provided in the JSON request body. <UpdateUser>.
     // If there is a value for it, add that value to the query string that sqlx will execute.
     for (field, item) in updates.clone().into_iter() {
