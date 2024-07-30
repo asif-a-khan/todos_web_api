@@ -7,6 +7,7 @@ use argon2::{
     },
     Argon2,
 };
+
 use axum::{
 	extract::Path, 
     http::StatusCode, 
@@ -25,6 +26,8 @@ use chrono::{Duration, Local};
 use rand::distributions::Alphanumeric;
 
 use rand::{thread_rng, Rng};
+
+use crate::models::user::FieldValue;
 
 use super::super::models::user::{
     User,
@@ -139,12 +142,11 @@ pub async fn users_update(
     Extension(pool): Extension<MySqlPool>,
     Json(updates): Json<UpdateUser>,
 ) -> Result<impl IntoResponse, (StatusCode, String)> {
-    println!("updated {:?}", updates);
     let mut query_string = "UPDATE users SET ".to_string();
     let mut params = Vec::new();
 
     // Use a helper function for query string building
-    build_update_query_string(&mut query_string, &mut params, &updates);
+    users_update_query_builder(&mut query_string, &mut params, &updates);
     
     // Remove trailing comma and space if any fields were updated
     if !params.is_empty() {
@@ -185,29 +187,61 @@ pub async fn fetch_user(id: &i32, pool: &MySqlPool) -> Result<User, (StatusCode,
 	Ok(user.unwrap())
 }
 
-// users_update helper function
-pub fn build_update_query_string(query: &mut String, params: &mut Vec<String>, updates: &UpdateUser) {
-    if let Some(username) = &updates.username {
-        query.push_str(&format!("username = '{}', ", username));
-        params.push(username.to_string());
+// Helper function for users_update.
+pub fn users_update_query_builder(query: &mut String, params: &mut Vec<String>, updates: &UpdateUser) {
+    // Go through all fields provided in the JSON request body. <UpdateUser>.
+    // If there is a value for it, add that value to the query string that sqlx will execute.
+    for (field, item) in updates.clone().into_iter() {
+        match item {
+            FieldValue::Username(val) => {
+                if let Some(username) = val {
+                    query.push_str(&format!("{} = '{}', ", field, username));
+                    params.push(field.to_string());
+                }
+            },
+            FieldValue::Password(val) => {
+                if let Some(password) = val {
+                    // Hash the password before storing
+                    let salt = SaltString::generate(&mut rand::thread_rng());
+                    let password_hash = Argon2::default()
+                        .hash_password(password.as_bytes(), &salt).unwrap();
+                    query.push_str(&format!("password_hash = '{}', ", password_hash.to_string()));
+                    query.push_str(&format!("{} = '{}', ", field, password));
+                    params.push(field.to_string());
+                }
+            },
+            FieldValue::Email(val) => {
+                if let Some(value) = val {
+                    query.push_str(&format!("{} = '{}', ", field, value));
+                    params.push(field.to_string());
+                }
+            },
+            FieldValue::PhoneNumber(val) => {
+                if let Some(value) = val {
+                    query.push_str(&format!("{} = '{}', ", field, value));
+                    params.push(field.to_string());
+                }
+            },
+            FieldValue::PhoneNumberVerified(val) => {
+                if let Some(value) = val {
+                    query.push_str(&format!("{} = '{}', ", field, value));
+                    params.push(field.to_string());
+                }
+            },
+            FieldValue::RefreshToken(val) => {
+                if let Some(value) = val {
+                    query.push_str(&format!("{} = '{}', ", field, value));
+                    params.push(field.to_string());
+                }
+            },
+            FieldValue::RefreshTokenExpiry(val) => {
+                if let Some(value) = val {
+                    query.push_str(&format!("{} = '{}', ", field, value));
+                    params.push(field.to_string());
+                }
+            },
+        }
     }
-    if let Some(password) = &updates.password {
-        // Hash the password before storing
-        let salt = SaltString::generate(&mut rand::thread_rng());
-        let password_hash = Argon2::default()
-            .hash_password(password.as_bytes(), &salt).unwrap();
-        query.push_str(&format!("password_hash = '{}', ", password_hash.to_string()));
-        params.push(password_hash.to_string());
-    }
-    if let Some(email) = &updates.email {
-        query.push_str(&format!("email = '{}', ", email));
-        params.push(email.to_string());
-    }
-    if let Some(phone_number) = &updates.phone_number {
-        query.push_str(&format!("phone_number = '{}', ", phone_number));
-        params.push(phone_number.to_string());
-    }
-    // Test
 }
 
 pub async fn users_delete(
@@ -225,7 +259,7 @@ pub async fn users_delete(
         return Err((StatusCode::INTERNAL_SERVER_ERROR, format!("Error deleting user from database: {}", e)))
     }
 
-	Ok(StatusCode::OK)
+	Ok((StatusCode::OK, "User deleted successfully".to_string()))
 }
 
 // Helper function to format validation errors

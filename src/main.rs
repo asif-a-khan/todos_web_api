@@ -38,7 +38,8 @@ async fn main() -> Result<(), Error> {
     let pool = MySqlPoolOptions::new()
         .max_connections(5)
         .connect(&db_url)
-        .await.unwrap();
+        .await
+        .unwrap();
 
     // Run Migrations
     sqlx::migrate!("./migrations")
