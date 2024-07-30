@@ -13,8 +13,8 @@ services:
       - DATABASE_URL=${DATABASE_URL}
     networks:
       - my-network
-    command: bash -c "cargo install cargo-watch && cargo watch -x run"
-    # command: bash -c "cargo build --release && ./target/release/todos_web_api"
+    command: bash -c "cargo build --release && ./target/release/todos_web_api"
+    # command: bash -c "cargo install cargo-watch && cargo watch -x run"
 
   mysql_db:
     image: mysql:latest
