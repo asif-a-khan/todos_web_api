@@ -15,3 +15,9 @@ pub struct CreateTodo {
 	pub done: bool,
     pub user_id: i32
 }
+
+#[derive(FromRow, Debug, Serialize, Deserialize)]
+pub struct UpdateTodo {
+    pub description: Option<String>,
+    pub done: Option<bool>
+}

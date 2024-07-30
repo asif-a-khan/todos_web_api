@@ -37,6 +37,14 @@ pub struct CreateUserFromInput {
     pub phone_number: Option<String>
 }
 
+#[derive(Deserialize, Serialize, Debug)]
+pub struct UpdateUser {
+    pub username: Option<String>,
+    pub password: Option<String>, // Allow password update (handle hashing separately)
+    pub email: Option<String>,
+    pub phone_number: Option<String>,
+}
+
 impl validator::Validate for CreateUser {
     fn validate(&self) -> Result<(), ValidationErrors> {
         let mut errors = ValidationErrors::new();

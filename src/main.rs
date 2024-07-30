@@ -19,14 +19,14 @@ use todos_web_api::controllers::{
         todos_find, 
         todos_create, 
         todos_delete, 
-        todos_update
+        todos_update,
     }, 
     users_controller::{
         users_index,
         users_create, 
         users_find, 
         users_delete, 
-        users_update, 
+        users_update,
     }
 };
 
