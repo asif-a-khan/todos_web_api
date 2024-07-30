@@ -6,103 +6,148 @@ use axum::{
 	Extension
 };
 
-use serde::{Deserialize, Serialize};
-use sqlx::prelude::FromRow;
+use super::super::models::todo::{
+	Todo, 
+	CreateTodo,
+	UpdateTodo
+};
 
-#[derive(FromRow, Debug, Serialize, Deserialize)]
-pub struct Todo {
-	pub id: i32,
-	pub description: String,
-	pub done: bool
-}
+use sqlx::MySqlPool;
 
-#[derive(FromRow, Debug, Serialize, Deserialize)]
-pub struct CreateTodo {
-	pub description: String,
-	pub done: bool
-}
-
-pub async fn todos_index(Extension(pool): Extension<sqlx::MySqlPool>) -> impl IntoResponse  {
+pub async fn todos_index(
+	Extension(pool): Extension<MySqlPool>
+) -> Result<impl IntoResponse, (StatusCode, String)>  {
 	let q = "SELECT * FROM todos";
 
 	let todos = sqlx::query_as::<_, Todo>(q)
 		.fetch_all(&pool)
-		.await
-		.unwrap_or_else(|e| {
-			eprintln!("Failed to get todos: {}", e);
-			let test = Todo {
-				id: 0,
-				description: "Error".to_string(),
-				done: false
-			};
-			vec![test]
-		});
+		.await;
 
-	(StatusCode::OK, Json(todos))
+	if let Err(e) = todos {
+		return Err((StatusCode::INTERNAL_SERVER_ERROR, format!("Error fetching todos from databasse: {}", e)))
+	}
+
+	Ok((StatusCode::OK, Json(todos.unwrap())))
 }
 
 pub async fn todos_find(
-	Extension(pool): Extension<sqlx::MySqlPool>, 
+	Extension(pool): Extension<MySqlPool>, 
 	Path(id): Path<i32>
-) -> impl IntoResponse  {
-	let q = format!("SELECT * FROM todos WHERE id = {}", id).to_string();
+) -> Result<impl IntoResponse, (StatusCode, String)>  {
+	let todo = fetch_todo(&id, &pool).await;
 
-	let todo = sqlx::query_as::<_, Todo>(&q)
-		.fetch_one(&pool)
-		.await
-		.unwrap();
+	match todo {
+		Ok(_) => Ok((StatusCode::OK, Json(todo.unwrap()))),
+		Err(e) => Err(e)
+	}
 
-	(StatusCode::OK, Json(todo))
 }
 
 pub async fn todos_create(
-	Extension(pool): Extension<sqlx::MySqlPool>,
+	Extension(pool): Extension<MySqlPool>,
 	Json(input): Json<CreateTodo>
-) -> impl IntoResponse  {
-	let q = "INSERT INTO todos (description, done) VALUES (?, ?)";
+) -> Result<impl IntoResponse, (StatusCode, String)>  {
+	let q = "INSERT INTO todos (description, done, user_id) VALUES (?, ?, ?)";
 
-	let todo = sqlx::query(q)
+	let todo_id = sqlx::query(q)
 		.bind(input.description)
 		.bind(input.done)
+		.bind(input.user_id)
 		.execute(&pool)
-		.await
-		.unwrap()
-		.last_insert_id();
+		.await;
 
-	(StatusCode::OK, Json(todo))
+	if let Err(e) = todo_id {
+		return Err((StatusCode::INTERNAL_SERVER_ERROR, format!("Failed to insert todo into database: {}", e)))
+	}
+
+	let id = todo_id.unwrap().last_insert_id() as i32;
+	let todo = fetch_todo(&id, &pool).await;
+
+	match todo {
+		Ok(_) => Ok((StatusCode::OK, Json(todo.unwrap()))),
+		Err(e) => Err(e)
+	}
 }
 
 pub async fn todos_update(
-	Extension(pool): Extension<sqlx::MySqlPool>,
-	Path(id): Path<i32>, Json(input): Json<CreateTodo>
-) -> impl IntoResponse  {
-	let q = "UPDATE todos SET description = ?, done = ? WHERE id = ?";
+    Path(id): Path<i32>,
+    Extension(pool): Extension<MySqlPool>,
+    Json(updates): Json<UpdateTodo>
+) -> Result<impl IntoResponse, (StatusCode, String)>  {
+    let mut query_string = "UPDATE todos SET ".to_string();
+    let mut params = Vec::new();
 
-	let todo = sqlx::query(q)
-		.bind(input.description)
-		.bind(input.done)
-		.bind(id)
-		.execute(&pool)
-		.await
-		.unwrap()
-		.last_insert_id();
+    // Use a helper function for query string building
+    build_update_query_string(&mut query_string, &mut params, &updates);
+    
+    // Remove trailing comma and space if any fields were updated
+    if !params.is_empty() {
+        query_string.truncate(query_string.len() - 2);
+    }
+    query_string.push_str(&format!(" WHERE id = {}", id));
 
-	(StatusCode::OK, Json(todo))
+    // Execute the query
+    let update_query = sqlx::query(&query_string)
+        .execute(&pool)
+        .await;
+
+	if let Err(e) = update_query {
+		return Err((StatusCode::INTERNAL_SERVER_ERROR, format!("Failed to update todo: {}", e)))
+	}
+
+	// Fetch the updated todo
+	let todo = fetch_todo(&id, &pool).await;	
+	if let Err(e) = todo {
+		return Err(e)
+	}
+
+	Ok((StatusCode::OK, Json(todo.unwrap())))
+	// Ok((StatusCode::OK, "test".to_string()))
+}
+
+// Find_todo helper function
+pub async fn fetch_todo(id: &i32, pool: &MySqlPool) -> Result<Todo, (StatusCode, String)> {
+	let q = &format!("SELECT * FROM todos WHERE id = {}", id).to_string();
+
+	let todo = sqlx::query_as::<_, Todo>(q)
+		.fetch_one(pool)
+		.await;
+
+	if let Err(e) = todo {
+		return Err((StatusCode::INTERNAL_SERVER_ERROR, format!("Failed to fetch todo from database: {}", e)))
+	}
+
+	Ok(todo.unwrap())
+}
+
+// todos_update helper function
+pub fn build_update_query_string(query: &mut String, params: &mut Vec<String>, updates: &UpdateTodo) {
+    if let Some(description) = &updates.description {
+        query.push_str(&format!("username = {}, ", description));
+        params.push(description.to_string());
+    }
+    if let Some(done) = &updates.done {
+        query.push_str(&format!("email = {}, ", done));
+        params.push(done.to_string());
+    }
 }
 
 pub async fn todos_delete(
-	Extension(pool): Extension<sqlx::MySqlPool>,
+	Extension(pool): Extension<MySqlPool>,
 	Path(id): Path<i32>
-) -> impl IntoResponse  {
+) -> Result<impl IntoResponse, (StatusCode, String)> {
 	let q = "DELETE FROM todos WHERE id = ?";
 
-	let _delete = sqlx::query(q)
+	let delete = sqlx::query(q)
 		.bind(id)
 		.execute(&pool)
-		.await
-		.unwrap();
+		.await;
 
-	StatusCode::OK
+	if let Err(e) = delete {
+		return Err((StatusCode::INTERNAL_SERVER_ERROR, format!("Failed to delete todo from database: {}", e)))
+	}
+
+	Ok(StatusCode::OK)
 }
 
 // Don't know why this won't work
