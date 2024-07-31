@@ -8,3 +8,7 @@ pub mod models {
     pub mod todo;
 }
 
+pub mod utils {
+    pub mod input_validation;
+}
+
