@@ -10,5 +10,16 @@ pub mod models {
 
 pub mod utils {
     pub mod input_validation;
+    pub mod error;
 }
 
+pub mod routes {
+    pub mod init;
+    pub mod middlewares;
+    pub mod users;
+    pub mod todos;
+}
+
+pub mod database {
+    pub mod init;
+}
