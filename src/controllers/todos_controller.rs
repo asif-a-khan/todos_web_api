@@ -6,10 +6,16 @@ use axum::{
 	Extension
 };
 
-use super::super::models::todo::{
-	Todo, 
-	CreateTodo,
-	UpdateTodo
+use validator::Validate;
+
+use crate::{
+	models::todo::{
+		Todo, 
+		CreateTodo,
+		UpdateTodo,
+		FieldValue
+	},
+	utils::input_validation::handle_validation_errors
 };
 
 use sqlx::MySqlPool;
@@ -36,17 +42,25 @@ pub async fn todos_find(
 ) -> Result<impl IntoResponse, (StatusCode, String)>  {
 	let todo = fetch_todo(&id, &pool).await;
 
-	match todo {
-		Ok(_) => Ok((StatusCode::OK, Json(todo.unwrap()))),
-		Err(e) => Err(e)
+	if let Err(e) = todo {
+		return Err(e)
 	}
 
+	Ok((StatusCode::OK, Json(todo.unwrap())))
 }
 
 pub async fn todos_create(
 	Extension(pool): Extension<MySqlPool>,
 	Json(input): Json<CreateTodo>
 ) -> Result<impl IntoResponse, (StatusCode, String)>  {
+	// Validation
+	let validation = input.validate();
+
+	if let Err(e) = validation {
+		let error_string = handle_validation_errors(e);
+		return Err((StatusCode::BAD_REQUEST, format!("Validation failed: {}", error_string)))
+	}
+
 	let q = "INSERT INTO todos (description, done, user_id) VALUES (?, ?, ?)";
 
 	let todo_id = sqlx::query(q)
@@ -63,10 +77,11 @@ pub async fn todos_create(
 	let id = todo_id.unwrap().last_insert_id() as i32;
 	let todo = fetch_todo(&id, &pool).await;
 
-	match todo {
-		Ok(_) => Ok((StatusCode::OK, Json(todo.unwrap()))),
-		Err(e) => Err(e)
+	if let Err(e) = todo {
+		return Err(e)
 	}
+
+	Ok((StatusCode::OK, Json(todo.unwrap())))
 }
 
 pub async fn todos_update(
@@ -105,7 +120,26 @@ pub async fn todos_update(
 	// Ok((StatusCode::OK, "test".to_string()))
 }
 
-// Find_todo helper function
+// todos_update helper function
+pub fn build_update_query_string(query: &mut String, params: &mut Vec<String>, updates: &UpdateTodo) {
+	for (field, item) in updates.clone().into_iter() {
+		match item {
+			FieldValue::Description(value) => {
+				if let Some(val) = value {
+					query.push_str(&format!("{} = '{}', ", field, val));
+					params.push(val);
+				}
+			},
+			FieldValue::Done(value) => {
+				if let Some(val) = value {
+					query.push_str(&format!("{} = '{}', ", field, val as i32));
+					params.push(val.to_string());
+				}
+			}
+		}
+	}
+}
+
 pub async fn fetch_todo(id: &i32, pool: &MySqlPool) -> Result<Todo, (StatusCode, String)> {
 	let q = &format!("SELECT * FROM todos WHERE id = {}", id).to_string();
 
@@ -118,18 +152,6 @@ pub async fn fetch_todo(id: &i32, pool: &MySqlPool) -> Result<Todo, (StatusCode,
 	}
 
 	Ok(todo.unwrap())
-}
-
-// todos_update helper function
-pub fn build_update_query_string(query: &mut String, params: &mut Vec<String>, updates: &UpdateTodo) {
-    if let Some(description) = &updates.description {
-        query.push_str(&format!("username = {}, ", description));
-        params.push(description.to_string());
-    }
-    if let Some(done) = &updates.done {
-        query.push_str(&format!("email = {}, ", done));
-        params.push(done.to_string());
-    }
 }
 
 pub async fn todos_delete(
@@ -147,24 +169,20 @@ pub async fn todos_delete(
 		return Err((StatusCode::INTERNAL_SERVER_ERROR, format!("Failed to delete todo from database: {}", e)))
 	}
 
-	Ok(StatusCode::OK)
+	Ok((StatusCode::OK, "Todo deleted".to_string()))
 }
 
-// Don't know why this won't work
-// pub async fn todos_index() -> Result<(StatusCode, Json<Vec<Todo>>), Box<dyn Error>> {
-//     dotenv().ok();
-//     let db_url = env::var("DATABASE_URL").expect("Database URL Not Found");
-//     let pool = sqlx::mysql::MySqlPoolOptions::new()
-//         .max_connections(5)
-//         .connect(&db_url)
-//         .await?;
+pub async fn fetch_user_todo(user_id: &i32, todo_id: &i32, pool: &MySqlPool) -> Result<Todo, (StatusCode, String)> {
+	let q = &format!("SELECT * FROM todos WHERE user_id = {} AND id = {}", user_id, todo_id).to_string();
 
-//     let q = "SELECT * FROM todos";
+	let todo = sqlx::query_as::<_, Todo>(q)
+		.fetch_one(pool)
+		.await;
 
-//     let todos = sqlx::query_as::<_, Todo>(q)
-//         .fetch_all(&pool)
-//         .await?;
-	
-//     Ok((StatusCode::OK, Json(todos)))
-// }
+	if let Err(e) = todo {
+		return Err((StatusCode::INTERNAL_SERVER_ERROR, format!("Failed to fetch todo from database: {}", e)))
+	}
+
+	Ok(todo.unwrap())
+}
 

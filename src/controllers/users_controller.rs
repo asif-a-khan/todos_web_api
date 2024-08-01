@@ -16,7 +16,6 @@ use axum::{
     Json
 };
 
-
 use chrono::{Duration, Local};
 // use jsonwebtoken::{encode, EncodingKey, Header};
 // use validator::{
@@ -26,15 +25,17 @@ use chrono::{Duration, Local};
 use rand::distributions::Alphanumeric;
 
 use rand::{thread_rng, Rng};
-use validator::{Validate, ValidationErrors};
+use validator::Validate;
 
-use crate::models::user::FieldValue;
-
-use super::super::models::user::{
-    User,
-    CreateUser,
-    CreateUserFromInput,
-    UpdateUser
+use crate::{
+    models::user::{
+        User,
+        CreateUser,
+        CreateUserFromInput,
+        UpdateUser,
+        FieldValue
+    }, 
+    utils::input_validation::handle_validation_errors
 };
 
 use sqlx::MySqlPool;
@@ -59,14 +60,10 @@ pub async fn users_find(
 	Extension(pool): Extension<MySqlPool>, 
 	Path(id): Path<i32>
 ) -> Result<impl IntoResponse, (StatusCode, String)>  {
-	let q = format!("SELECT * FROM users WHERE id = {}", id).to_string();
-
-	let user = sqlx::query_as::<_, User>(&q)
-		.fetch_one(&pool)
-		.await;
+	let user = fetch_user(&id, &pool).await;
 
     if let Err(e) = user {
-        return Err((StatusCode::INTERNAL_SERVER_ERROR, format!("Failed to fetch user from database: {}", e)))
+        return Err(e)
     }
 
 	Ok((StatusCode::OK, Json(user.unwrap())))
@@ -131,18 +128,15 @@ pub async fn users_create(
         ));
     }
 
-    let user_id = user_id.unwrap().last_insert_id();
-    let q2: &str = "SELECT * FROM users WHERE id = ?";
+    let user_id = user_id.unwrap().last_insert_id() as i32;
 
-    let user = sqlx::query_as::<_, User>(q2)
-        .bind(user_id)
-		.fetch_one(&pool)
-		.await
-        .unwrap();
+    let user = fetch_user(&user_id, &pool).await;
 
-    Ok((StatusCode::CREATED, Json(user)))
+    if let Err(e) = user {
+        return Err(e)
+    }
 
-
+    Ok((StatusCode::CREATED, Json(user.unwrap())))
 }
 
 pub async fn users_update(
@@ -272,21 +266,4 @@ pub async fn users_delete(
     }
 
 	Ok((StatusCode::OK, "User deleted successfully".to_string()))
-}
-
-// Helper function to format validation errors
-fn handle_validation_errors(errors: ValidationErrors) -> String {
-    println!("Validation errors: {:#?}", errors);
-    let formatted_errors: Vec<String> = errors
-        .field_errors()
-        .into_iter()
-        .map(|(field, errors)| {
-            let error_messages: Vec<_> = errors
-                .iter()
-                .filter_map(|err| err.message.clone().map(|msg| msg.into_owned())) // Handle Optional message
-                .collect();
-            format!("{}: {}", field, error_messages.join(", "))
-        })
-        .collect();
-    formatted_errors.join(", ")
 }
