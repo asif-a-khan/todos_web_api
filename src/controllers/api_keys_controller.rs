@@ -8,12 +8,6 @@ use axum::{
     Extension, 
     Json
 };
-use chrono::{
-    DateTime, 
-    FixedOffset, 
-    Utc, 
-    Duration
-};
 
 use crate::{
     models::api_key::{
@@ -102,7 +96,7 @@ pub async fn create_api_key(
     client_name: &str,
     contact_email: &str
 ) -> Result<ApiKey, (StatusCode, String)>  {
-    let api_key = generate_api_key(pool).await;
+    let api_key = generate_api_key().await;
     let q = &format!("INSERT INTO api_keys (api_key, client_name, contact_email) VALUES ({api_key}, {client_name}, {contact_email})");
 
     let api_key_id = sqlx::query(q)

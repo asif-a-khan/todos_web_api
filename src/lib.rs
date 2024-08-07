@@ -25,6 +25,9 @@ pub mod routes {
     pub mod middlewares;
     pub mod users;
     pub mod todos;
+    pub mod refresh_tokens;
+    pub mod access_tokens;
+    pub mod api_keys;
 }
 
 pub mod database {

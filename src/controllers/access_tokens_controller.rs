@@ -17,14 +17,11 @@ use chrono::{
 
 use crate::{
     models::access_token::{
-        CreateAccessTokenFromInput, 
-        FieldValue, 
-        AccessToken, 
-        UpdateAccessToken
+        AccessToken, CreateAccessTokenFromInput, FieldValue, UpdateAccessToken
     }, 
     utils::{
         input_validation::handle_validation_errors, 
-        tokens::generate_access_token
+        tokens::{decode_access_token, generate_access_token}
     }
 };
 
@@ -53,6 +50,10 @@ pub async fn access_tokens_find(
     if let Err(e) = access_token {
         return Err(e)
     }
+
+    let t = access_token.clone().unwrap().token;
+
+    decode_access_token(&t).await;
 
     Ok((StatusCode::OK, Json(access_token.unwrap())))
 }
@@ -104,9 +105,18 @@ pub async fn create_access_token(
     let offset = FixedOffset::east_opt(6 * 3600); // BST is +6 hours from UTC
     let now_in_dhaka: DateTime<FixedOffset> = Utc::now().with_timezone(&offset.unwrap());
     let expires_at = now_in_dhaka + Duration::days(7);
-    let token = generate_access_token(pool).await;
-    let q = &format!("INSERT INTO access_tokens (user_id, token, expires_at) VALUES ({user_id}, {token}, {expires_at})");
+    let expires_at_formatted = expires_at.with_timezone(&Utc);
+    
+    let token = generate_access_token(user_id, pool).await;
+    if let Err(e) = token {
+        return Err((StatusCode::INTERNAL_SERVER_ERROR, format!("Failed to generate access token: {}", e)))
+    }
+
+    let q = &format!("INSERT INTO access_tokens (user_id, token, expires_at) VALUES (?, ?, ?)");
     let access_token_id = sqlx::query(q)
+        .bind(user_id)
+        .bind(token.unwrap())
+        .bind(expires_at_formatted)
         .execute(pool)
         .await;
 

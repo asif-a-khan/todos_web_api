@@ -103,9 +103,15 @@ pub async fn create_refresh_token(
     let offset = FixedOffset::east_opt(6 * 3600); // BST is +6 hours from UTC
     let now_in_dhaka: DateTime<FixedOffset> = Utc::now().with_timezone(&offset.unwrap());
     let expires_at = now_in_dhaka + Duration::days(7);
+    let expires_at_formatted = expires_at.with_timezone(&Utc);
     let token = generate_refresh_token(pool).await;
-    let q = &format!("INSERT INTO refresh_tokens (user_id, token, expires_at) VALUES ({user_id}, {token}, {expires_at})");
+
+
+    let q = &format!("INSERT INTO refresh_tokens (user_id, token, expires_at) VALUES (?, ?, ?)");
     let refresh_token_id = sqlx::query(q)
+        .bind(user_id)
+        .bind(token)
+        .bind(expires_at_formatted)
         .execute(pool)
         .await;
 

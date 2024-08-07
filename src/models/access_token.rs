@@ -9,7 +9,7 @@ use serde::{Deserialize, Serialize};
 use sqlx::FromRow;
 use validator::{ValidationError, ValidationErrors};
 
-#[derive(Debug, FromRow, Serialize, Deserialize)]
+#[derive(Debug, FromRow, Serialize, Deserialize, Clone)]
 pub struct AccessToken {
     pub id: i32,
     pub user_id: i32,
