@@ -16,26 +16,19 @@ use axum::{
     Json
 };
 
-use chrono::{Duration, Local};
 // use jsonwebtoken::{encode, EncodingKey, Header};
 // use validator::{
 //     // Validate, 
 //     // ValidationErrors
 // };
-use rand::distributions::Alphanumeric;
 
-use rand::{thread_rng, Rng};
 use validator::Validate;
 
 use crate::{
     models::user::{
-        User,
-        CreateUser,
-        CreateUserFromInput,
-        UpdateUser,
-        FieldValue
+        CreateUser, CreateUserFromInput, FieldValue, UpdateUser, User
     }, 
-    utils::input_validation::handle_validation_errors
+    utils::{input_validation::handle_validation_errors, tokens::generate_refresh_token}
 };
 
 use sqlx::MySqlPool;
@@ -44,6 +37,8 @@ pub async fn users_index(
     Extension(pool): Extension<MySqlPool>
 ) -> Result<impl IntoResponse, (StatusCode, String)> {
 	let q = "SELECT * FROM users";
+
+    let _token = generate_refresh_token(&pool).await;
 
 	let users = sqlx::query_as::<_, User>(q)
 		.fetch_all(&pool)
@@ -80,7 +75,7 @@ pub async fn users_create(
         return Err((StatusCode::BAD_REQUEST, format!("Validation failed: {}", error_string)))
     }
 
-    let q = "INSERT INTO users (username, password_hash, email, phone_number, phone_number_verified, refresh_token, refresh_token_expiry) VALUES (?, ?, ?, ?, ?, ?, ?)";
+    let q = "INSERT INTO users (username, password_hash, email, phone_number, phone_number_verified) VALUES (?, ?, ?, ?, ?)";
 
     let salt = SaltString::generate(&mut rand::thread_rng());
     let argon2 = Argon2::default(); 
@@ -93,20 +88,12 @@ pub async fn users_create(
         ));
     }
 
-    let refresh_token: String = thread_rng()
-        .sample_iter(&Alphanumeric)
-        .take(32)
-        .map(char::from)
-        .collect();
-
     let new_user = CreateUser {
         username: input.username,
         password: password_hash.unwrap().to_string(),
         email: input.email,
         phone_number: input.phone_number,
         phone_number_verified: false,
-        refresh_token: Some(refresh_token),
-        refresh_token_expiry: Some(Local::now() + Duration::hours(2)),
     };
 
 	let user_id = sqlx::query(q)
@@ -115,8 +102,6 @@ pub async fn users_create(
         .bind(new_user.email)
         .bind(new_user.phone_number)
         .bind(new_user.phone_number_verified)
-        .bind(new_user.refresh_token)
-        .bind(new_user.refresh_token_expiry)
 		.execute(&pool)
 		.await;
 
@@ -176,7 +161,7 @@ pub async fn users_update(
 
 // Find_user helper function
 pub async fn fetch_user(id: &i32, pool: &MySqlPool) -> Result<User, (StatusCode, String)> {
-	let q = &format!("SELECT * FROM users WHERE id = {}", id).to_string();
+	let q = &format!("SELECT * FROM users WHERE id = {}", id);
 
 	let user = sqlx::query_as::<_, User>(q)
 		.fetch_one(pool)
@@ -233,19 +218,7 @@ pub fn users_update_query_builder(
                     query.push_str(&format!("{} = '{}', ", field, value));
                     params.push(field.to_string());
                 }
-            },
-            FieldValue::RefreshToken(val) => {
-                if let Some(value) = val {
-                    query.push_str(&format!("{} = '{}', ", field, value));
-                    params.push(field.to_string());
-                }
-            },
-            FieldValue::RefreshTokenExpiry(val) => {
-                if let Some(value) = val {
-                    query.push_str(&format!("{} = '{}', ", field, value));
-                    params.push(field.to_string());
-                }
-            },
+            }
         }
     }
 }
