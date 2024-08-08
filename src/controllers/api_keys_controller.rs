@@ -29,26 +29,17 @@ pub async fn api_keys_index(
 
     let api_keys = sqlx::query_as::<_, ApiKey>(q)
         .fetch_all(&pool)
-        .await;
+        .await
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, format!("Failed to fetch api keys from database: {}", e)))?;
 
-    if let Err(e) = api_keys {
-        return Err((StatusCode::INTERNAL_SERVER_ERROR, format!("Failed to fetch api keys from database: {}", e)))
-    }
-
-    Ok((StatusCode::OK, Json(api_keys.unwrap())))
+    Ok((StatusCode::OK, Json(api_keys)))
 }
 
 pub async fn api_keys_find(
     Extension(pool): Extension<MySqlPool>, 
     Path(id): Path<i32>
 ) -> Result<impl IntoResponse, (StatusCode, String)>  {
-    let api_key = fetch_api_key(&pool, id).await;
-
-    if let Err(e) = api_key {
-        return Err(e)
-    }
-
-    Ok((StatusCode::OK, Json(api_key.unwrap())))
+    Ok((StatusCode::OK, Json(fetch_api_key(&pool, id).await?)))
 }
 
 
@@ -61,33 +52,24 @@ pub async fn fetch_api_key(
 
     let api_key = sqlx::query_as::<_, ApiKey>(q)
         .fetch_one(pool)
-        .await;
+        .await
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, format!("Failed to fetch api key from database: {}", e)))?;
 
-    if let Err(e) = api_key {
-        return Err((StatusCode::INTERNAL_SERVER_ERROR, format!("Failed to fetch api key from database: {}", e)))
-    }
-
-    Ok(api_key.unwrap())
+    Ok(api_key)
 }
 
 pub async fn api_keys_create(
     Extension(pool): Extension<MySqlPool>, 
     Json(input): Json<CreateApiKey>
 ) -> Result<impl IntoResponse, (StatusCode, String)>  {
-    let validation = input.validate();
-
-    if let Err(e) = validation {
+    input.validate().map_err(|e| {
         let error_string = handle_validation_errors(e);
-        return Err((StatusCode::BAD_REQUEST, error_string))
-    }
+        (StatusCode::BAD_REQUEST, format!("Validation failed: {}", error_string))
+    })?;
 
-    let api_key = create_api_key(&pool, &input.client_name, &input.contact_email).await;
-
-    if let Err(e) = api_key {
-        return Err(e)
-    }
+    let api_key = create_api_key(&pool, &input.client_name, &input.contact_email).await?;
     
-    Ok((StatusCode::CREATED, Json(api_key.unwrap())))
+    Ok((StatusCode::CREATED, Json(api_key)))
 }
 
 // Helper function for creating api key.
@@ -101,19 +83,12 @@ pub async fn create_api_key(
 
     let api_key_id = sqlx::query(q)
         .execute(pool)
-        .await;
-
-    if let Err(e) = api_key_id {
-        return Err((StatusCode::INTERNAL_SERVER_ERROR, format!("Failed to create api key in database: {}", e)))
-    }
+        .await
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, format!("Failed to create api key in database: {}", e)))?;
     
-    let api_key = fetch_api_key(pool, api_key_id.unwrap().last_insert_id() as i32).await;
+    let api_key = fetch_api_key(pool, api_key_id.last_insert_id() as i32).await?;
 
-    if let Err(e) = api_key {
-        return Err((StatusCode::INTERNAL_SERVER_ERROR, format!("Failed to fetch api key from database: {:?}", e)))
-    }
-
-    return Ok(api_key.unwrap());
+    Ok(api_key)
 }
 
 pub async fn api_keys_update(
@@ -127,21 +102,14 @@ pub async fn api_keys_update(
     api_keys_update_query_builder(&mut query_string, &mut params, &updates).await;
     query_string.push_str(&format!(" WHERE id = {}", id));
 
-    let api_key = sqlx::query(&query_string)
+    sqlx::query(&query_string)
         .execute(&pool)
-        .await;
+        .await
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, format!("Failed to update api token in database: {}", e)))?;
 
-    if let Err(e) = api_key {
-        return Err((StatusCode::INTERNAL_SERVER_ERROR, format!("Failed to update api token in database: {}", e)))
-    }
-
-    let api_key = fetch_api_key(&pool, id).await;
-
-    if let Err(e) = api_key {
-        return Err(e)
-    }
+    let api_key = fetch_api_key(&pool, id).await?;
     
-    Ok((StatusCode::OK, Json(api_key.unwrap())))
+    Ok((StatusCode::OK, Json(api_key)))
 }
 
 pub async fn api_keys_update_query_builder(
@@ -184,13 +152,11 @@ pub async fn api_keys_delete(
     Path(id): Path<i32>
 ) -> Result<impl IntoResponse, (StatusCode, String)> {
     let q = &format!("DELETE FROM api_keys WHERE id = {}", id);
-    let api_key = sqlx::query(q)
-        .execute(&pool)
-        .await;
 
-    if let Err(e) = api_key {
-        return Err((StatusCode::INTERNAL_SERVER_ERROR, format!("Failed to delete api key in database: {}", e)))
-    }
+    sqlx::query(q)
+        .execute(&pool)
+        .await
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, format!("Failed to delete api key in database: {}", e)))?;
     
     Ok((StatusCode::OK, Json("Api key deleted successfully".to_string())))
 }

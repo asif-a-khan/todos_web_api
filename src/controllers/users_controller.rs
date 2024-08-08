@@ -1,8 +1,6 @@
 use argon2::{
     password_hash::{
-        // PasswordHash, 
         PasswordHasher, 
-        // PasswordVerifier, 
         SaltString
     },
     Argon2,
@@ -16,19 +14,17 @@ use axum::{
     Json
 };
 
-// use jsonwebtoken::{encode, EncodingKey, Header};
-// use validator::{
-//     // Validate, 
-//     // ValidationErrors
-// };
-
 use validator::Validate;
 
 use crate::{
     models::user::{
-        CreateUser, CreateUserFromInput, FieldValue, UpdateUser, User
+        CreateUser, 
+        CreateUserFromInput, 
+        FieldValue, 
+        UpdateUser, 
+        User
     }, 
-    utils::{input_validation::handle_validation_errors, tokens::generate_refresh_token}
+    utils::input_validation::handle_validation_errors
 };
 
 use sqlx::MySqlPool;
@@ -38,59 +34,40 @@ pub async fn users_index(
 ) -> Result<impl IntoResponse, (StatusCode, String)> {
 	let q = "SELECT * FROM users";
 
-    let _token = generate_refresh_token(&pool).await;
-
 	let users = sqlx::query_as::<_, User>(q)
 		.fetch_all(&pool)
-		.await;
+		.await
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, format!("Failed to fetch users from database: {}", e)))?;
 
-    if let Err(e) = users {
-        return Err((StatusCode::INTERNAL_SERVER_ERROR, format!("Failed to fetch users from database: {}", e)))
-    }
-
-	Ok((StatusCode::OK, Json(users.unwrap())))
+	Ok((StatusCode::OK, Json(users)))
 }
 
 pub async fn users_find(
 	Extension(pool): Extension<MySqlPool>, 
 	Path(id): Path<i32>
 ) -> Result<impl IntoResponse, (StatusCode, String)>  {
-	let user = fetch_user(&id, &pool).await;
-
-    if let Err(e) = user {
-        return Err(e)
-    }
-
-	Ok((StatusCode::OK, Json(user.unwrap())))
+    Ok((StatusCode::OK, Json(fetch_user(&id, &pool).await?))) 
 }
 
 pub async fn users_create(
     Extension(pool): Extension<MySqlPool>, 
     Json(input): Json<CreateUserFromInput>
 ) -> Result<impl IntoResponse, (StatusCode, String)> {
-    let validation = input.validate();
-
-    if let Err(e) = validation {
+    input.validate().map_err(|e| {
         let error_string = handle_validation_errors(e);
-        return Err((StatusCode::BAD_REQUEST, format!("Validation failed: {}", error_string)))
-    }
+        (StatusCode::BAD_REQUEST, format!("Validation failed: {}", error_string))
+    })?;
 
     let q = "INSERT INTO users (username, password_hash, email, phone_number, phone_number_verified) VALUES (?, ?, ?, ?, ?)";
 
     let salt = SaltString::generate(&mut rand::thread_rng());
     let argon2 = Argon2::default(); 
-    let password_hash = argon2.hash_password(input.password.as_bytes(), &salt);
-    
-    if let Err(e) = password_hash {
-        return Err((
-            StatusCode::INTERNAL_SERVER_ERROR,
-            format!("Error hashing password: {}", e),
-        ));
-    }
+    let password_hash = argon2.hash_password(input.password.as_bytes(), &salt)
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, format!("Error hashing password: {}", e)))?;
 
     let new_user = CreateUser {
         username: input.username,
-        password: password_hash.unwrap().to_string(),
+        password: password_hash.to_string(),
         email: input.email,
         phone_number: input.phone_number,
         phone_number_verified: false,
@@ -103,25 +80,14 @@ pub async fn users_create(
         .bind(new_user.phone_number)
         .bind(new_user.phone_number_verified)
 		.execute(&pool)
-		.await;
+		.await
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, format!("Error creating user: {}", e)))?;
 
-    if let Err(e) = user_id {
-        println!("Error creating user: {}", e);
-        return Err((
-            StatusCode::INTERNAL_SERVER_ERROR,
-            format!("Error creating user: {}", e),
-        ));
-    }
+    let user_id = user_id.last_insert_id() as i32;
 
-    let user_id = user_id.unwrap().last_insert_id() as i32;
+    let user = fetch_user(&user_id, &pool).await?;
 
-    let user = fetch_user(&user_id, &pool).await;
-
-    if let Err(e) = user {
-        return Err(e)
-    }
-
-    Ok((StatusCode::CREATED, Json(user.unwrap())))
+    Ok((StatusCode::CREATED, Json(user)))
 }
 
 pub async fn users_update(
@@ -142,21 +108,15 @@ pub async fn users_update(
     query_string.push_str(&format!(" WHERE id = {}", id));
 
     // Execute the query
-    let update_query = sqlx::query(&query_string)
+    sqlx::query(&query_string)
         .execute(&pool)
-        .await;
-
-	if let Err(e) = update_query {
-		return Err((StatusCode::INTERNAL_SERVER_ERROR, format!("Failed to update todos: {} {}", e, query_string)))
-	}
+        .await
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, format!("Failed to update todos: {} {}", e, query_string)))?;
 
 	// Fetch the updated todo
-	let user = fetch_user(&id, &pool).await;	
-	if let Err(e) = user {
-		return Err(e)
-	}
+	let user = fetch_user(&id, &pool).await?;	
 
-	Ok((StatusCode::OK, Json(user.unwrap())))
+	Ok((StatusCode::OK, Json(user)))
 }
 
 // Find_user helper function
@@ -165,13 +125,10 @@ pub async fn fetch_user(id: &i32, pool: &MySqlPool) -> Result<User, (StatusCode,
 
 	let user = sqlx::query_as::<_, User>(q)
 		.fetch_one(pool)
-		.await;
+		.await
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, format!("Failed to fetch user from database: {}", e)))?;
 
-	if let Err(e) = user {
-		return Err((StatusCode::INTERNAL_SERVER_ERROR, format!("Failed to fetch user from database: {}", e)))
-	}
-
-	Ok(user.unwrap())
+	Ok(user)
 }
 
 // Helper function for users_update.
@@ -229,14 +186,11 @@ pub async fn users_delete(
 ) -> Result<impl IntoResponse, (StatusCode, String)>  {
 	let q = "DELETE FROM users WHERE id = ?";
 
-	let delete = sqlx::query(q)
+	sqlx::query(q)
 		.bind(id)
 		.execute(&pool)
-		.await;
-
-    if let Err(e) = delete {
-        return Err((StatusCode::INTERNAL_SERVER_ERROR, format!("Error deleting user from database: {}", e)))
-    }
+		.await
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, format!("Error deleting user from database: {}", e)))?;
 
 	Ok((StatusCode::OK, "User deleted successfully".to_string()))
 }

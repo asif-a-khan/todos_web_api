@@ -1,4 +1,5 @@
 pub mod controllers {
+    pub mod auth_controller;
     pub mod users_controller;
     pub mod todos_controller;
     pub mod refresh_tokens_controller;
@@ -12,6 +13,7 @@ pub mod models {
     pub mod refresh_token;
     pub mod access_token;
     pub mod api_key;
+    pub mod auth;
 }
 
 pub mod utils {

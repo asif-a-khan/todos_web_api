@@ -1,8 +1,8 @@
 use std::env;
+use axum::http::StatusCode;
 use dotenv::dotenv;
 use chrono::{Duration, FixedOffset, Utc};
 use rand::{distributions::Alphanumeric, thread_rng, Rng};
-use serde::{Deserialize, Serialize};
 use sqlx::MySqlPool;
 use jsonwebtoken::{
     decode, 
@@ -15,12 +15,11 @@ use jsonwebtoken::{
 };
 use uuid::Uuid;
 
-use crate::models::{access_token::AccessToken, refresh_token::RefreshToken};
+use crate::models::{access_token::AccessToken, auth::Claims, refresh_token::RefreshToken};
 
 pub async fn generate_refresh_token(
     pool: &MySqlPool
 ) -> String {
-    
     let mut refresh_token: String;
     loop {
         // Generate a 32-character alphanumeric token
@@ -44,16 +43,10 @@ pub async fn generate_refresh_token(
     refresh_token
 }
 
-#[derive(Debug, Serialize, Deserialize)]
-struct Claims {
-    sub: String, // Subject (usually the user ID)
-    exp: usize,  // Expiration time (in seconds since the Unix epoch)
-}
-
 pub async fn generate_access_token(
     user_id: &i32,
     pool: &MySqlPool
-) -> Result<String, jsonwebtoken::errors::Error> {
+) -> Result<String, (StatusCode, String)> {
     dotenv().ok();
     let mut token: String;
     let secret_key = env::var("SECRET_KEY").expect("Secret key not found");
@@ -72,7 +65,11 @@ pub async fn generate_access_token(
             &Header::default(), 
             &claims,
             &EncodingKey::from_secret(secret_key.as_bytes()), 
-        )?;
+        ).map_err(|e| {
+            (StatusCode::INTERNAL_SERVER_ERROR, format!("Failed to generate access token: {}", e))
+        })?;
+
+        
     
         let q = format!("SELECT 1 FROM access_tokens WHERE token = {token}");
         // Check for uniqueness in the database
