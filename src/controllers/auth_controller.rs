@@ -1,6 +1,9 @@
 use argon2::{PasswordHash, PasswordVerifier};
 use axum::{
-    body::{self, Body}, extract::Extension, http::{header::SET_COOKIE, StatusCode}, response::{IntoResponse, Response}, Json
+    extract::Extension, 
+    http::StatusCode, 
+    response::IntoResponse, 
+    Json
 };
 use serde::Serialize;
 use sqlx::MySqlPool;
@@ -10,13 +13,14 @@ use chrono::{
     FixedOffset, 
     Utc
 };
-use tower_cookies::{
-    cookie::time::OffsetDateTime, 
-    cookie::time::Duration as TowerDuration, 
-    Cookie,
+
+use tower_cookies::{ 
+    Cookie, 
+    Cookies,
 }; 
 
-use crate::{models::{
+use crate::{
+    models::{
     auth::{LoginUser, LogoutUser},
     user::User
 }, 
@@ -35,6 +39,7 @@ struct ResponseMessage {
 
 pub async fn login(
     Extension(pool): Extension<MySqlPool>,
+    cookies: Cookies,
     Json(payload): Json<LoginUser>
 ) -> Result<impl IntoResponse, (StatusCode, String)> {
     payload.validate().map_err(|errors| {
@@ -60,6 +65,8 @@ pub async fn login(
                 // Generate JWT access token
                 let token = generate_access_token(&user.id, &pool).await?;
 
+                println!("Generated JWT access token: {}", token);
+
                 // Generate refresh token
                 let refresh_token = generate_refresh_token(&pool).await;
 
@@ -84,25 +91,20 @@ pub async fn login(
                 // Create cookies for access and refresh tokens
                 let access_token_cookie = Cookie::build(("access_token", token))
                     .http_only(true)
-                    .path("/")
+                    .path("/api")
                     .build();
 
                 let refresh_token_cookie = Cookie::build(("refresh_token", refresh_token))
                     .http_only(true)
-                    .path("/auth/refresh") // Restrict to refresh route only
+                    .path("/api") // Restrict to refresh route only
                     .build();
 
-                // Build the response and attach cookies
-                let mut response = (StatusCode::OK, Json(ResponseMessage {message: "Login Successful"})).into_response();
+                // Add the cookies to the existing cookies object
+                cookies.add(access_token_cookie);
+                cookies.add(refresh_token_cookie);
 
-                response.headers_mut().insert(
-                    SET_COOKIE,
-                    access_token_cookie.to_string().parse().unwrap(),
-                );
-                response.headers_mut().insert(
-                    SET_COOKIE,
-                    refresh_token_cookie.to_string().parse().unwrap(),
-                );
+                // Build the response and attach cookies
+                let response = (StatusCode::OK, Json(ResponseMessage {message: "Login Successful"})).into_response();
 
                 Ok(response)
             } else {
@@ -115,22 +117,24 @@ pub async fn login(
 
 pub async fn logout(
     Extension(pool): Extension<MySqlPool>,
+    cookies: Cookies,
     Json(payload): Json<LogoutUser>
 ) -> Result <impl IntoResponse, (StatusCode, String)> {
-    
+
     // Clear the access token cookie
+    // Clear the refresh token cookie
     let access_token_cookie = Cookie::build(("access_token", ""))
         .http_only(true)
-        .path("/")
-        .expires(Some(OffsetDateTime::now_utc() - TowerDuration::seconds(1)))
+        .path("/api")
         .build();
 
-    // Clear the refresh token cookie
     let refresh_token_cookie = Cookie::build(("refresh_token", ""))
         .http_only(true)
-        .path("/auth/refresh") 
-        .expires(Some(OffsetDateTime::now_utc() - TowerDuration::seconds(1)))
+        .path("/api") // Restrict to refresh route only
         .build();
+
+    cookies.add(access_token_cookie);
+    cookies.add(refresh_token_cookie);
 
     // Invalidate the refresh token in the database
     let q = format!("DELETE FROM refresh_tokens WHERE user_id = '{}'", payload.user_id);
@@ -141,17 +145,8 @@ pub async fn logout(
             (StatusCode::INTERNAL_SERVER_ERROR, format!("Failed to invalidate refresh token in database: {}", e))
         })?;
 
-    // Build the response and attach cookies to clear them
-    let mut response = (StatusCode::OK, Json(ResponseMessage {message: "Logout successful"})).into_response();
-
-    response.headers_mut().insert(
-        SET_COOKIE,
-        access_token_cookie.to_string().parse().unwrap(),
-    );
-    response.headers_mut().insert(
-        SET_COOKIE,
-        refresh_token_cookie.to_string().parse().unwrap(),
-    );
+    // Build the response.
+    let response = (StatusCode::OK, Json(ResponseMessage {message: "Logout successful"})).into_response();
 
     Ok(response)
 }

@@ -23,7 +23,7 @@ pub fn routes() -> Router {
             .delete(users_delete)
         )
         .nest(
-            "/auth", 
+            "/api/auth", 
             Router::new()
                 .route("/login", post(login))
                 // .route("/refresh", post(refresh)) 
