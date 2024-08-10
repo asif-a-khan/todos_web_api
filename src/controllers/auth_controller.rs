@@ -120,7 +120,7 @@ pub async fn logout(
     cookies: Cookies,
     Json(payload): Json<LogoutUser>
 ) -> Result <impl IntoResponse, (StatusCode, String)> {
-
+    // test 
     // Clear the access token cookie
     // Clear the refresh token cookie
     let access_token_cookie = Cookie::build(("access_token", ""))
