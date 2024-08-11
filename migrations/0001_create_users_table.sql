@@ -4,7 +4,7 @@ CREATE TABLE IF NOT EXISTS users (
     password_hash           VARCHAR(255) NOT NULL,
     email                   VARCHAR(255) UNIQUE,
     phone_number            VARCHAR(20),
-    refresh_token           VARCHAR(255),
-    refresh_token_expiry    TIMESTAMP,
-    phone_number_verified   BOOLEAN NOT NULL DEFAULT false 
+    phone_number_verified   BOOLEAN NOT NULL DEFAULT false,
+    created_at              TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at              TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
 );

@@ -1,5 +1,10 @@
 use std::borrow::Cow;
 
+
+use chrono::{
+	DateTime,
+	Local
+};
 use serde::{Deserialize, Serialize};
 use sqlx::prelude::FromRow;
 use validator::{ValidationError, ValidationErrors};
@@ -9,7 +14,9 @@ pub struct Todo {
 	pub id: i32,
     pub user_id: i32,
 	pub description: String,
-	pub done: bool
+	pub done: bool,
+	pub created_at: DateTime<Local>,
+    pub updated_at: DateTime<Local>
 }
 
 #[derive(FromRow, Debug, Serialize, Deserialize)]

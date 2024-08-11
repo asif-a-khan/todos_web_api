@@ -16,8 +16,8 @@ pub struct User {
     pub email: String,
     pub phone_number: Option<String>,
     pub phone_number_verified: bool,
-    pub refresh_token: Option<String>,
-    pub refresh_token_expiry: Option<chrono::DateTime<Local>>
+    pub created_at: chrono::DateTime<Local>,
+    pub updated_at: chrono::DateTime<Local>
 }
 
 #[derive(Deserialize, Serialize, FromRow)]
@@ -26,9 +26,7 @@ pub struct CreateUser {
     pub password: String,
     pub email: String,
     pub phone_number: Option<String>,
-    pub phone_number_verified: bool,
-    pub refresh_token: Option<String>,
-    pub refresh_token_expiry: Option<chrono::DateTime<Local>>
+    pub phone_number_verified: bool
 }
 
 #[derive(Deserialize, Serialize, FromRow)]
@@ -46,8 +44,6 @@ pub struct UpdateUser {
     pub email: Option<String>,
     pub phone_number: Option<String>,
     pub phone_number_verified: Option<bool>,
-    pub refresh_token: Option<String>,
-    pub refresh_token_expiry: Option<chrono::DateTime<Local>>
 }
 
 #[derive(Debug)]
@@ -57,8 +53,6 @@ pub enum FieldValue {
     Email(Option<String>),
     PhoneNumber(Option<String>),
     PhoneNumberVerified(Option<bool>),
-    RefreshToken(Option<String>),
-    RefreshTokenExpiry(Option<chrono::DateTime<Local>>),
 
 }
 
@@ -72,9 +66,7 @@ impl IntoIterator for UpdateUser {
             ("password", FieldValue::Password(self.password)),
             ("email", FieldValue::Email(self.email)),
             ("phone_number", FieldValue::PhoneNumber(self.phone_number)),
-            ("phone_number_verified", FieldValue::PhoneNumberVerified(self.phone_number_verified)),
-            ("refresh_token", FieldValue::RefreshToken(self.refresh_token)),
-            ("refresh_token_expiry", FieldValue::RefreshTokenExpiry(self.refresh_token_expiry)),
+            ("phone_number_verified", FieldValue::PhoneNumberVerified(self.phone_number_verified))
         ].into_iter()
     }
 }

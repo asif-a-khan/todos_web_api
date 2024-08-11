@@ -1,8 +1,8 @@
-CREATE TABLE IF NOT EXISTS todos (
+CREATE TABLE IF NOT EXISTS refresh_tokens (
     id              BIGINT SIGNED PRIMARY KEY NOT NULL AUTO_INCREMENT,
+    token           VARCHAR(255) UNIQUE NOT NULL,
     user_id         BIGINT SIGNED NOT NULL,
-    description     VARCHAR(255) NOT NULL,
-    done            BOOLEAN NOT NULL DEFAULT false,
+    expires_at      TIMESTAMP NOT NULL,
     created_at      TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at      TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     FOREIGN KEY     (user_id) REFERENCES users(id)
