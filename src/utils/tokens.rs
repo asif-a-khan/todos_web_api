@@ -1,21 +1,17 @@
 use std::env;
-use axum::http::StatusCode;
+use axum::{http::StatusCode, Json};
 use dotenv::dotenv;
-use chrono::{Duration, FixedOffset, Utc};
+use chrono::{
+    DateTime, Duration, FixedOffset, TimeZone, Utc
+};
 use rand::{distributions::Alphanumeric, thread_rng, Rng};
 use sqlx::MySqlPool;
 use jsonwebtoken::{
-    decode, 
-    encode, 
-    Algorithm, 
-    DecodingKey, 
-    EncodingKey, 
-    Header, 
-    Validation
+    decode, encode, Algorithm, DecodingKey, EncodingKey, Header, TokenData, Validation
 };
 use uuid::Uuid;
 
-use crate::models::{access_token::AccessToken, auth::Claims, refresh_token::RefreshToken};
+use crate::models::{access_token::AccessToken, auth::{Claims, ResponseMessage}, refresh_token::RefreshToken};
 
 pub async fn generate_refresh_token(
     pool: &MySqlPool
@@ -86,7 +82,7 @@ pub async fn generate_access_token(
     Ok(token)
 }
 
-pub async fn decode_access_token(token: &str) {
+pub async fn decode_access_token(token: &str) -> Result<TokenData<Claims>, (StatusCode, Json<ResponseMessage>)>{
     dotenv().ok();
     let secret_key = env::var("SECRET_KEY").expect("Secret key not found");
 
@@ -96,17 +92,33 @@ pub async fn decode_access_token(token: &str) {
     let result = decode::<Claims>(token, &decoding_key, &validation);
 
     match result {
-        Ok(token_data) => {
-            println!("Decoded JWT:");
-            println!("Header: {:?}", token_data.header);
-            println!("Claims: {:?}", token_data.claims);
-        }
+        Ok(token_data) => Ok(token_data),
         Err(err) => {
-            println!("Error decoding JWT: {}", err);
+            match err.kind() {
+                jsonwebtoken::errors::ErrorKind::ExpiredSignature => {
+                    return Err((StatusCode::UNAUTHORIZED, Json(ResponseMessage { message: "Token expired in decode token".to_string() })));
+                }
+                jsonwebtoken::errors::ErrorKind::InvalidToken => {
+                    return Err((StatusCode::UNAUTHORIZED, Json(ResponseMessage { message: format!("Error decoding JWT: {}", err) })));
+                },
+                _ => {
+                    return Err((StatusCode::INTERNAL_SERVER_ERROR, Json(ResponseMessage { message: format!("Error decoding JWT: {}", err) })));
+                }
+            }
         }
     }
 }
 
 pub async fn generate_api_key() -> String {
     Uuid::new_v4().to_string() 
+}
+
+pub async fn time_in_dhaka(timestamp: i64) -> DateTime<FixedOffset> {
+    // Convert to UTC time and time in Dhaka
+    let expiration_datetime_utc = Utc.timestamp_opt(timestamp as i64, 0); 
+
+    let offset_opt = FixedOffset::east_opt(6 * 3600);
+    let offset = offset_opt.unwrap();
+    let expiration_datetime_bst = expiration_datetime_utc.unwrap().with_timezone(&offset);
+    expiration_datetime_bst
 }

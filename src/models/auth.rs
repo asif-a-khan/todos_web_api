@@ -20,6 +20,16 @@ pub struct LogoutUser {
     pub user_id: String,
 }
 
+#[derive(Deserialize)]
+pub struct RefreshUser {
+    pub user_id: String,
+}
+
+#[derive(Serialize)]
+pub struct ResponseMessage {
+    pub message: String,
+}
+
 impl validator::Validate for LoginUser {
     fn validate(&self) -> Result<(), ValidationErrors> {
         let mut errors = ValidationErrors::new();
